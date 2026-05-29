@@ -108,16 +108,25 @@ def validate_annotation(
             )
 
         split_after = item.get("split_after")
-        if split_after is False and boundary_type != "none":
+        if not isinstance(split_after, bool):
             issues.append(
                 _issue(
-                    "split_false_boundary_not_none",
+                    "invalid_split_after",
                     local_sid=local_sid,
-                    boundary_type=boundary_type,
+                    split_after=split_after,
                 )
             )
-        if split_after is True and boundary_type == "none":
-            issues.append(_issue("split_true_boundary_none", local_sid=local_sid))
+        else:
+            if split_after is False and boundary_type != "none":
+                issues.append(
+                    _issue(
+                        "split_false_boundary_not_none",
+                        local_sid=local_sid,
+                        boundary_type=boundary_type,
+                    )
+                )
+            if split_after is True and boundary_type == "none":
+                issues.append(_issue("split_true_boundary_none", local_sid=local_sid))
 
         confidence = item.get("confidence")
         if (
@@ -191,6 +200,7 @@ def ingest_batch_results(
     issue_count = 0
     failure_count = 0
     review_count = 0
+    seen_custom_ids: set[str] = set()
 
     with (
         batch_output_path.open("r", encoding="utf-8") as batch_handle,
@@ -208,6 +218,9 @@ def ingest_batch_results(
                 custom_id = row.get("custom_id")
                 if not isinstance(custom_id, str) or not custom_id:
                     raise ValueError("Batch row missing custom_id")
+                if custom_id in seen_custom_ids:
+                    raise ValueError(f"Duplicate batch custom_id {custom_id!r}")
+                seen_custom_ids.add(custom_id)
                 mapping = mappings.get(custom_id)
                 if mapping is None:
                     raise ValueError(f"No window mapping for custom_id {custom_id!r}")
@@ -257,6 +270,19 @@ def ingest_batch_results(
                     )
                 )
                 failure_count += 1
+
+        for custom_id in sorted(set(mappings) - seen_custom_ids):
+            failure_handle.write(
+                _jsonl(
+                    {
+                        "custom_id": custom_id,
+                        "line_number": None,
+                        "exception_type": "MissingBatchResult",
+                        "error": f"Missing batch result for custom_id {custom_id!r}",
+                    }
+                )
+            )
+            failure_count += 1
 
     summary = {
         "created_at": datetime.now().isoformat(timespec="seconds"),

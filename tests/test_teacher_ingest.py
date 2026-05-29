@@ -74,6 +74,29 @@ def _annotation() -> dict[str, object]:
     }
 
 
+def _batch_response_row(
+    custom_id: str, annotation: dict[str, object]
+) -> dict[str, object]:
+    return {
+        "custom_id": custom_id,
+        "response": {
+            "status_code": 200,
+            "body": {
+                "output": [
+                    {
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": json.dumps(annotation, ensure_ascii=False),
+                            }
+                        ]
+                    }
+                ]
+            },
+        },
+    }
+
+
 class TeacherIngestTests(unittest.TestCase):
     def test_validate_annotation_accepts_valid_output(self) -> None:
         issues = validate_annotation(_mapping(), _annotation())
@@ -90,6 +113,16 @@ class TeacherIngestTests(unittest.TestCase):
         self.assertIn("missing_target_annotation", codes)
         self.assertIn("unknown_boundary_type", codes)
 
+    def test_validate_annotation_rejects_invalid_split_after_type(self) -> None:
+        annotation = _annotation()
+        annotation["boundary_annotations"][0]["split_after"] = "false"
+        annotation["boundary_annotations"][1]["split_after"] = None
+
+        issues = validate_annotation(_mapping(), annotation)
+        codes = [issue["code"] for issue in issues]
+
+        self.assertEqual(codes.count("invalid_split_after"), 2)
+
     def test_ingest_batch_results_writes_annotations_review_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -99,24 +132,9 @@ class TeacherIngestTests(unittest.TestCase):
             windows_path.write_text(
                 json.dumps(_mapping(), ensure_ascii=False) + "\n", encoding="utf-8"
             )
-            response_body = {
-                "output": [
-                    {
-                        "content": [
-                            {
-                                "type": "output_text",
-                                "text": json.dumps(_annotation(), ensure_ascii=False),
-                            }
-                        ]
-                    }
-                ]
-            }
             batch_output_path.write_text(
                 json.dumps(
-                    {
-                        "custom_id": "teacher:doc-a:w0000:0-3",
-                        "response": {"status_code": 200, "body": response_body},
-                    },
+                    _batch_response_row("teacher:doc-a:w0000:0-3", _annotation()),
                     ensure_ascii=False,
                 )
                 + "\n",
@@ -141,6 +159,88 @@ class TeacherIngestTests(unittest.TestCase):
         self.assertEqual(summary["failure_count"], 0)
         self.assertEqual(len(annotations), 1)
         self.assertEqual(len(review), 1)
+
+    def test_ingest_batch_results_fails_missing_window_results(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            windows_path = root / "windows.jsonl"
+            batch_output_path = root / "batch_output.jsonl"
+            out_dir = root / "ingested"
+            second_mapping = _mapping()
+            second_mapping["custom_id"] = "teacher:doc-a:w0001:3-6"
+            windows_path.write_text(
+                json.dumps(_mapping(), ensure_ascii=False)
+                + "\n"
+                + json.dumps(second_mapping, ensure_ascii=False)
+                + "\n",
+                encoding="utf-8",
+            )
+            batch_output_path.write_text(
+                json.dumps(
+                    _batch_response_row("teacher:doc-a:w0000:0-3", _annotation()),
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = ingest_batch_results(
+                windows_path=windows_path,
+                batch_output_path=batch_output_path,
+                out_dir=out_dir,
+            )
+
+            failures = [
+                json.loads(line)
+                for line in (out_dir / "teacher_failures.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+        self.assertEqual(summary["ok_count"], 1)
+        self.assertEqual(summary["failure_count"], 1)
+        self.assertEqual(failures[0]["custom_id"], "teacher:doc-a:w0001:3-6")
+        self.assertIn("Missing batch result", failures[0]["error"])
+
+    def test_ingest_batch_results_rejects_duplicate_output_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            windows_path = root / "windows.jsonl"
+            batch_output_path = root / "batch_output.jsonl"
+            out_dir = root / "ingested"
+            row = _batch_response_row("teacher:doc-a:w0000:0-3", _annotation())
+            windows_path.write_text(
+                json.dumps(_mapping(), ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+            batch_output_path.write_text(
+                json.dumps(row, ensure_ascii=False)
+                + "\n"
+                + json.dumps(row, ensure_ascii=False)
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = ingest_batch_results(
+                windows_path=windows_path,
+                batch_output_path=batch_output_path,
+                out_dir=out_dir,
+            )
+
+            annotations = (out_dir / "teacher_annotations.jsonl").read_text(
+                encoding="utf-8"
+            ).splitlines()
+            failures = [
+                json.loads(line)
+                for line in (out_dir / "teacher_failures.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+        self.assertEqual(summary["ok_count"], 1)
+        self.assertEqual(summary["failure_count"], 1)
+        self.assertEqual(len(annotations), 1)
+        self.assertEqual(len(failures), 1)
+        self.assertIn("Duplicate batch custom_id", failures[0]["error"])
 
 
 if __name__ == "__main__":
