@@ -1,4 +1,4 @@
-BOUNDARY_TYPES = [
+BOUNDARY_TYPES = (
     "none",
     "topic_shift",
     "scripture_reading_start",
@@ -7,7 +7,7 @@ BOUNDARY_TYPES = [
     "application_start",
     "prayer_or_closing",
     "enumeration_start",
-]
+)
 
 SYSTEM_PROMPT = (
     "You annotate Korean sermon discourse boundaries for RAG preprocessing. "
