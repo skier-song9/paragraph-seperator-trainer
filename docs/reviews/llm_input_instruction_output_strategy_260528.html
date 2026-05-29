@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<!-- ==================================================================
+     LONG DOCUMENT TEMPLATE · parchment design system
+     多页 A4 白皮书/技术报告/年度总结
+     结构：封面 -> 目录 -> 执行摘要 -> 正文章节 -> 附录
+     ================================================================== -->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>문서 유형별 LLM 입력·지시·출력 전략</title>
+<meta name="author" content="Kami">
+<meta name="description" content="설교 RAG 문단 경계 라벨 생성을 위해 원천 문서 유형별 LLM 입력, instruction, 출력 JSON 계약을 정리한 전략 문서.">
+<meta name="keywords" content="LLM 입력 전략, 문단 경계, 설교 RAG, teacher annotation, JSON schema">
+<meta name="generator" content="Kami">
+<style>
+  /* Regular weight */
+  @font-face {
+    font-family: "TsangerJinKai02";
+    src: url("../fonts/TsangerJinKai02-W04.ttf") format("truetype"),
+       url("https://cdn.jsdelivr.net/gh/tw93/Kami@main/assets/fonts/TsangerJinKai02-W04.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+  }
+
+  /* Bold weight - W05 for all bold variants */
+  @font-face {
+    font-family: "TsangerJinKai02";
+    src: url("../fonts/TsangerJinKai02-W05.ttf") format("truetype"),
+       url("https://cdn.jsdelivr.net/gh/tw93/Kami@main/assets/fonts/TsangerJinKai02-W05.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
+  }
+
+  @page {
+    size: A4;
+    margin: 20mm 22mm 22mm 22mm;
+    background: #f5f4ed;
+
+    @top-right {
+      content: string(section-title);
+      font-family: "TsangerJinKai02", "Source Han Serif SC",
+                   "Noto Serif CJK SC", "Songti SC", Georgia, serif;
+      font-size: 8pt;
+      color: #6b6a64;
+    }
+
+    @bottom-center {
+      content: counter(page) "  ·  문서 유형별 LLM 입력·지시·출력 전략";
+      font-family: "TsangerJinKai02", "Source Han Serif SC",
+                   "Noto Serif CJK SC", "Songti SC", Georgia, serif;
+      font-size: 9pt;
+      color: #6b6a64;
+    }
+  }
+
+  @page:first {
+    @top-right { content: ""; }
+    @bottom-center { content: ""; }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --parchment: #f5f4ed;
+    --ivory:     #faf9f5;
+    --near-black:#141413;
+    --dark-warm: #3d3d3a;
+    --olive:     #504e49;
+    --stone:     #6b6a64;
+    --brand:     #1B365D;
+    --border:    #e8e6dc;
+    --border-soft:#e5e3d8;
+    --tag-bg:    #E4ECF5;
+    --serif: "TsangerJinKai02", "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", Georgia, serif;
+    --sans: var(--serif);
+
+    --rhythm-module:  14pt;
+    --rhythm-section: 18pt;
+  }
+
+  html, body { background: var(--parchment); }
+
+  @media screen {
+    body { max-width: 210mm; margin: 0 auto; padding: 20mm 22mm 22mm 22mm; }
+  }
+
+  body {
+    color: var(--near-black);
+    font-family: var(--serif);
+    font-size: 10.5pt;
+    line-height: 1.55;
+    letter-spacing: 0.3pt;
+    widows: 3;
+    orphans: 3;
+  }
+
+  .sans {
+    font-family: var(--sans);
+  }
+
+  /* ========== COVER ========== */
+  .cover {
+    min-height: 240mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40mm 0 0 0;
+    break-after: page;
+  }
+  .cover-eyebrow {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--brand);
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    margin-bottom: 18pt;
+  }
+  .cover-title {
+    font-size: 36pt;
+    font-weight: 500;
+    color: var(--near-black);
+    line-height: 1.15;
+    letter-spacing: 0.3pt;
+    margin-bottom: 16pt;
+  }
+  .cover-sub {
+    font-family: var(--sans);
+    font-size: 14pt;
+    color: var(--olive);
+    line-height: 1.5;
+    max-width: 85%;
+    margin-bottom: 30pt;
+  }
+  .cover-meta {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--stone);
+    line-height: 1.5;
+  }
+  .cover-meta strong {
+    color: var(--dark-warm);
+    font-weight: 500;
+  }
+
+  /* ========== TOC（目录）========== */
+  .toc { break-after: page; }
+  .toc h2 {
+    font-size: 22pt;
+    font-weight: 500;
+    margin-bottom: var(--rhythm-module);
+    border-left: 2.5pt solid var(--brand);
+    border-radius: 1.5pt;
+    padding-left: 8pt;
+  }
+  .toc-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6pt 0;
+    border-bottom: 0.3pt dotted var(--border);
+    font-size: 11pt;
+  }
+  .toc-item:last-of-type { border-bottom: none; }
+  .toc-num {
+    color: var(--brand);
+    font-weight: 500;
+    min-width: 30pt;
+  }
+  .toc-title {
+    flex: 1;
+    color: var(--near-black);
+    padding-left: 6pt;
+  }
+  .toc-page {
+    color: var(--stone);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ========== HEADINGS ========== */
+  h1 {
+    font-size: 22pt;
+    font-weight: 500;
+    line-height: 1.2;
+    margin: 0 0 10pt 0;
+    border-left: 2.5pt solid var(--brand);
+    border-radius: 1.5pt;
+    padding-left: 8pt;
+    color: var(--near-black);
+    break-after: avoid;
+  }
+
+  h2 {
+    font-size: 16pt;
+    font-weight: 500;
+    line-height: 1.25;
+    margin: 24pt 0 8pt 0;
+    color: var(--near-black);
+    break-after: avoid;
+    string-set: section-title content();
+  }
+
+  h3 {
+    font-size: 13pt;
+    font-weight: 500;
+    line-height: 1.3;
+    margin: 18pt 0 6pt 0;
+    color: var(--dark-warm);
+    break-after: avoid;
+  }
+
+  .chapter-num {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--brand);
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    margin-bottom: 6pt;
+  }
+
+  /* ========== PARAGRAPHS ========== */
+  p {
+    margin: 0 0 10pt 0;
+    line-height: 1.55;
+    color: var(--near-black);
+    widows: 2;
+    orphans: 2;
+  }
+
+  .lead {
+    font-size: 12pt;
+    line-height: 1.55;
+    color: var(--dark-warm);
+    margin-bottom: var(--rhythm-module);
+  }
+
+  .hl { color: var(--brand); font-weight: 500; }
+  strong { font-weight: 500; }
+
+  /* ========== LISTS ========== */
+  ul, ol {
+    margin: 6pt 0 10pt 0;
+    padding-left: 20pt;
+    line-height: 1.55;
+  }
+  ul li::marker { color: var(--brand); }
+  ol li::marker { color: var(--brand); font-weight: 500; }
+
+  /* ========== QUOTE ========== */
+  blockquote, .quote {
+    border-left: 2pt solid var(--brand);
+    margin: 12pt 0;
+    padding: 4pt 0 4pt 16pt;
+    color: var(--olive);
+    line-height: 1.55;
+    break-inside: avoid;
+  }
+  blockquote .cite, .quote .cite {
+    display: block;
+    font-size: 9pt;
+    color: var(--stone);
+    margin-top: 4pt;
+  }
+
+  /* ========== CODE ========== */
+  /* Mono first for English glyphs, then CJK fallback so Chinese comments
+     inside code/pre render correctly. A mono-only chain causes missing
+     glyphs rendered as "?" or missing-glyph boxes in WeasyPrint when the system lacks
+     a mono font with CJK coverage. */
+  code {
+    font-family: "JetBrains Mono", "SF Mono", Consolas,
+                 "TsangerJinKai02", "Source Han Serif SC",
+                 "Noto Serif CJK SC", "Songti SC", monospace;
+    font-size: 9pt;
+    background: var(--ivory);
+    padding: 1pt 4pt;
+    border-radius: 2pt;
+    color: var(--dark-warm);
+  }
+  pre {
+    font-family: "JetBrains Mono", "SF Mono", Consolas,
+                 "TsangerJinKai02", "Source Han Serif SC",
+                 "Noto Serif CJK SC", "Songti SC", monospace;
+    font-size: 9pt;
+    line-height: 1.5;
+    background: var(--ivory);
+    border-radius: 4pt;
+    padding: 10pt 14pt;
+    margin: 10pt 0;
+    white-space: pre-wrap;
+    color: var(--near-black);
+    break-inside: avoid;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+
+  /* ========== TABLE (kami-table) ========== */
+  table, .kami-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+    margin: 12pt 0;
+    break-inside: avoid;
+  }
+  table th, .kami-table th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--dark-warm);
+    padding: 6pt 8pt;
+    border-bottom: 1pt solid var(--border);
+    background: transparent;
+  }
+  table td, .kami-table td {
+    padding: 5pt 8pt;
+    border-bottom: 0.3pt solid var(--border-soft);
+    vertical-align: top;
+  }
+  table.compact th, .kami-table.compact th { padding: 3pt 6pt; font-size: 8pt; }
+  table.compact td, .kami-table.compact td { padding: 2pt 6pt; font-size: 8pt; line-height: 1.4; }
+  table.financial td:not(:first-child), .kami-table.financial td:not(:first-child) {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  table.financial th:not(:first-child), .kami-table.financial th:not(:first-child) { text-align: right; }
+  table.striped tbody tr:nth-child(even) td, .kami-table.striped tbody tr:nth-child(even) td {
+    background: var(--ivory);
+  }
+  table .total td, .kami-table .total td {
+    font-weight: 500; border-top: 1pt solid var(--brand); border-bottom: none; color: var(--near-black);
+  }
+
+  /* ========== CALLOUT ========== */
+  .callout {
+    background: var(--ivory);
+    border-left: 2pt solid var(--brand);
+    padding: 10pt 14pt;
+    border-radius: 3pt;
+    margin: 12pt 0;
+    line-height: 1.55;
+    break-inside: avoid;
+  }
+  .callout blockquote,
+  .callout .quote {
+    border-left: none;
+    padding-left: 0;
+    margin: 6pt 0;
+    color: var(--olive);
+  }
+  .callout blockquote:first-child,
+  .callout .quote:first-child { margin-top: 0; }
+  .callout blockquote:last-child,
+  .callout .quote:last-child  { margin-bottom: 0; }
+
+  .takeaway {
+    background: var(--ivory);
+    border-radius: 4pt;
+    padding: 10pt 14pt;
+    margin: 14pt 0;
+    break-inside: avoid;
+  }
+  .takeaway-label {
+    font-family: var(--sans);
+    font-size: 9pt;
+    color: var(--brand);
+    letter-spacing: 0.5pt;
+    text-transform: uppercase;
+    margin-bottom: 4pt;
+  }
+
+  /* ========== TAG ========== */
+  .tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--brand);
+    font-family: var(--sans);
+    font-size: 9pt;
+    font-weight: 500;
+    padding: 1pt 6pt;
+    border-radius: 3pt;
+    margin-right: 4pt;
+  }
+
+  /* ========== FIGURE ========== */
+  figure {
+    margin: 14pt 0;
+    break-inside: avoid;
+  }
+  figure img {
+    max-width: 100%;
+    border-radius: 4pt;
+  }
+  figcaption {
+    font-family: var(--sans);
+    font-size: 9pt;
+    color: var(--stone);
+    margin-top: 6pt;
+    text-align: center;
+  }
+
+  /* ========== EXECUTIVE SUMMARY ========== */
+  .exec-summary {
+    background: var(--ivory);
+    border-left: 1.4pt solid var(--brand);
+    border-radius: 6pt;
+    padding: 16pt 20pt;
+    margin: 14pt 0;
+    break-inside: avoid;
+  }
+  .exec-summary h2 {
+    margin-top: 0;
+    font-size: 13pt;
+  }
+
+  /* ========== CHAPTER BREAK ========== */
+  .chapter { break-before: page; }
+</style>
+</head>
+<body>
+
+<!-- ═════════════ COVER ═════════════ -->
+<section class="cover">
+  <div>
+    <div class="cover-eyebrow">TECHNICAL MEMO · 2026-05-28</div>
+    <div class="cover-title">문서 유형별 LLM 입력·지시·출력 전략</div>
+    <div class="cover-sub">설교 RAG 문단 경계 라벨 생성을 위한 source-aware teacher annotation 계약</div>
+  </div>
+  <div class="cover-meta">
+    <strong>paragraph-seperator-trainer</strong><br>
+    V1.0 · 2026.05.28<br>
+    대상: datas/datalab_parsed, datas/docx, datas/hwps
+  </div>
+</section>
+
+<!-- ═════════════ 目录 ═════════════ -->
+<section class="toc">
+  <h2>목차</h2>
+  <div class="toc-item">
+    <span class="toc-num">01</span>
+    <span class="toc-title">요약 결론</span>
+    <span class="toc-page">03</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">02</span>
+    <span class="toc-title">공통 I/O 계약</span>
+    <span class="toc-page">04</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">03</span>
+    <span class="toc-title">원천 포맷별 입력 전략</span>
+    <span class="toc-page">06</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">04</span>
+    <span class="toc-title">LLM instruction 작성법</span>
+    <span class="toc-page">09</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">05</span>
+    <span class="toc-title">출력 JSON과 검수 규칙</span>
+    <span class="toc-page">11</span>
+  </div>
+</section>
+
+<!-- ═════════════ Chapter 01：执行摘要 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">01 · Executive Summary</div>
+  <h1>요약 결론</h1>
+
+  <p class="lead">
+    LLM은 문단을 새로 쓰는 생성기가 아니라 <span class="hl">sentence_id 사이의 split 여부를 판정하는 teacher annotator</span>로 써야 한다.
+    원천 파일의 차이는 모델 지시문보다 입력 포장 방식에서 먼저 흡수하고, 출력은 모든 문서에서 같은 JSON schema로 고정한다.
+  </p>
+
+  <h2>핵심 Takeaways</h2>
+  <ul>
+    <li><strong>입력:</strong> 원문 전체를 던지지 말고, <code>extracted_blocks</code>와 <code>sentence_units</code>를 만든 뒤 구조 metadata를 함께 보낸다.</li>
+    <li><strong>instruction:</strong> 모든 문서 유형에 공통 system prompt를 쓰고, 원천 포맷별 주의사항만 user payload 안의 <code>instructions</code>에 추가한다.</li>
+    <li><strong>출력:</strong> <code>boundary_annotations</code>, <code>proposed_atomic_paragraphs</code>, <code>quality_flags</code>를 strict JSON으로 받는다.</li>
+  </ul>
+
+  <div class="takeaway">
+    <div class="takeaway-label">이 문서가 답하는 질문</div>
+    1. DATAlab HTML, DOCX, HWP를 각각 어떤 형태로 LLM에 넣을 것인가?<br>
+    2. LLM에게 경계 판단을 시킬 때 system/user instruction은 어떻게 분리할 것인가?<br>
+    3. classifier 학습과 human review에 바로 쓸 수 있는 출력은 무엇인가?
+  </div>
+
+  <h2>현재 smoke test에서 확인된 신호</h2>
+  <table class="compact">
+    <thead>
+      <tr>
+        <th>case</th>
+        <th>source_type</th>
+        <th>effort</th>
+        <th>sentences</th>
+        <th>splits</th>
+        <th>tokens</th>
+        <th>판정</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>datalab_xhigh</code></td>
+        <td><code>datalab_parsed_json</code></td>
+        <td>xhigh</td>
+        <td>8</td>
+        <td>4</td>
+        <td>5714</td>
+        <td>반복 heading과 HTML boundary hint를 구분함.</td>
+      </tr>
+      <tr>
+        <td><code>docx_high</code></td>
+        <td><code>docx</code></td>
+        <td>high</td>
+        <td>8</td>
+        <td>3</td>
+        <td>3375</td>
+        <td>한국어 본문만 남긴 뒤 scripture span을 안정적으로 보존함.</td>
+      </tr>
+      <tr>
+        <td><code>hwp_low</code></td>
+        <td><code>hwp</code></td>
+        <td>low</td>
+        <td>8</td>
+        <td>4</td>
+        <td>2327</td>
+        <td>짧은 scripture opening은 처리했지만 extraction noise flag가 필요함.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═════════════ Chapter 02：背景 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">02 · Background</div>
+  <h1>공통 I/O 계약</h1>
+
+  <p class="lead">
+    source_type이 달라도 LLM 앞단과 뒤단의 계약은 같아야 한다.
+    차이는 metadata richness, 구조 hint 신뢰도, extraction warning에만 반영한다.
+  </p>
+
+  <h2>LLM에 넣기 전 canonical flow</h2>
+  <p>
+    모든 원천 문서는 <code>raw_document -&gt; extracted_blocks -&gt; normalized_blocks -&gt; sentence_units -&gt; teacher_inputs -&gt; teacher_outputs -&gt; atomic_paragraphs</code>
+    순서로 통과한다. LLM은 이 흐름의 <code>teacher_inputs</code> 단계에만 들어간다.
+  </p>
+
+  <h2>공통 user payload</h2>
+  <p>LLM에는 자연어 원고가 아니라 아래 형태의 JSON 문자열을 넣는다. 핵심은 <code>sentence_id</code> 안정성과 원천 metadata 보존이다.</p>
+
+  <pre><code class="language-json">{
+  "task": "annotate_sentence_boundaries",
+  "document_id": "stable_document_id",
+  "source_type": "datalab_parsed_json | docx | hwp",
+  "document_kind": "sermon | lecture | book_chapter | prayer | notice | thesis | unknown",
+  "reasoning_effort": "low | high | xhigh",
+  "source_path": "datas/...",
+  "extraction_notes": ["parser/tool notes"],
+  "allowed_boundary_types": [
+    "none",
+    "topic_shift",
+    "scripture_reading_start",
+    "scripture_explanation_start",
+    "illustration_start",
+    "application_start",
+    "prayer_or_closing",
+    "enumeration_start"
+  ],
+  "instructions": ["source-specific constraints"],
+  "sentences": [
+    {
+      "sentence_id": "doc.s0001",
+      "text": "문장 원문",
+      "block_id": "b0001",
+      "block_type": "heading | paragraph | quote | table | unknown",
+      "source_tag": "h2 | p | docx_paragraph | hwp_paragraph",
+      "page_id": null,
+      "paragraph_index": 12,
+      "heading_context": [],
+      "html_boundary_before": false
+    }
+  ]
+}</code></pre>
+
+  <h2>boundary taxonomy</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>boundary_type</th>
+        <th>쓸 때</th>
+        <th>금지할 때</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>none</code></td>
+        <td><code>split_after=false</code>인 모든 경우.</td>
+        <td><code>split_after=true</code>와 함께 쓰지 않는다.</td>
+      </tr>
+      <tr>
+        <td><code>topic_shift</code></td>
+        <td>제목, 인사, 주제 전환, 새 논지 시작.</td>
+        <td>질문과 바로 다음 답변 사이.</td>
+      </tr>
+      <tr>
+        <td><code>scripture_reading_start</code></td>
+        <td>본문 낭독 또는 짧은 재낭독이 시작될 때.</td>
+        <td>성경 구절 설명이 시작되는 문장.</td>
+      </tr>
+      <tr>
+        <td><code>scripture_explanation_start</code></td>
+        <td>인용이 끝나고 해석, 적용, 설명으로 넘어갈 때.</td>
+        <td>구절 번호만 분리하는 경우.</td>
+      </tr>
+      <tr>
+        <td><code>illustration_start</code></td>
+        <td>예화, 간증, 사례 서사가 시작될 때.</td>
+        <td>짧은 수사적 질문만 있는 경우.</td>
+      </tr>
+      <tr>
+        <td><code>application_start</code></td>
+        <td>청중에게 직접 적용하거나 권면이 시작될 때.</td>
+        <td>본문 해석의 자연스러운 연속.</td>
+      </tr>
+      <tr>
+        <td><code>prayer_or_closing</code></td>
+        <td>기도, 초청, 마무리 멘트.</td>
+        <td>설교 중간의 짧은 감탄문.</td>
+      </tr>
+      <tr>
+        <td><code>enumeration_start</code></td>
+        <td>첫째/둘째, 1장/2장, 항목형 설명이 시작될 때.</td>
+        <td>이미 같은 열거 안의 다음 항목일 뿐인 경우.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═════════════ Chapter 03：方法 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">03 · Methodology</div>
+  <h1>원천 포맷별 입력 전략</h1>
+
+  <p class="lead">
+    포맷별 차이는 원문 품질과 구조 정보의 신뢰도 차이다.
+    따라서 LLM에 넣는 텍스트 양보다 어떤 hint를 같이 넣는지가 더 중요하다.
+  </p>
+
+  <h2>1. <code>datalab_parsed_json</code>: HTML 구조를 약한 라벨로 사용</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>항목</th>
+        <th>전략</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>입력 단위</td>
+        <td>JSON 내부 <code>html</code>을 직접 보내지 말고, <code>h1/h2/h3/p/li/table</code>를 block으로 파싱한 뒤 sentence unit으로 보낸다.</td>
+      </tr>
+      <tr>
+        <td>필수 metadata</td>
+        <td><code>source_tag</code>, <code>page_id</code>, <code>heading_context</code>, <code>html_boundary_before</code>, 반복 heading 후보.</td>
+      </tr>
+      <tr>
+        <td>reasoning effort</td>
+        <td>OCR 노이즈, 반복 제목, page header/footer가 섞이면 <code>xhigh</code>. 구조가 깨끗하면 <code>high</code>.</td>
+      </tr>
+      <tr>
+        <td>주의</td>
+        <td>HTML 경계는 강한 hint지만 정답은 아니다. LLM instruction에 "consider but do not blindly follow"를 반드시 넣는다.</td>
+      </tr>
+      <tr>
+        <td>받을 output</td>
+        <td>반복 heading, scripture-reference 결합, 원래 HTML paragraph 내부 semantic split 여부를 <code>quality_flags</code>로 받는다.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <pre><code class="language-json">{
+  "source_type": "datalab_parsed_json",
+  "extraction_notes": [
+    "JSON html parsed with HTMLParser.",
+    "h1/h2/p/page metadata retained as label hints.",
+    "page_count=50"
+  ],
+  "instructions": [
+    "HTML tag and heading_context are boundary hints, not gold labels.",
+    "Detect repeated page headings and report them in quality_flags.",
+    "Keep scripture text and verse reference in the same atomic paragraph where possible."
+  ]
+}</code></pre>
+
+  <h2>2. <code>docx</code>: 한국어 본문만 남기고 paragraph index를 보존</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>항목</th>
+        <th>전략</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>입력 단위</td>
+        <td><code>word/document.xml</code>의 <code>w:p</code>를 paragraph 단위로 읽고, 그 안에서 sentence unit을 만든다.</td>
+      </tr>
+      <tr>
+        <td>필수 metadata</td>
+        <td><code>paragraph_index</code>, <code>language_filter_reason</code>, <code>script_counts</code>, 제거된 외국어 paragraph 수.</td>
+      </tr>
+      <tr>
+        <td>reasoning effort</td>
+        <td>한국어/외국어 번역 단락이 교대하면 <code>high</code>. 깨끗한 한국어 원고는 batch 비용을 보고 낮출 수 있다.</td>
+      </tr>
+      <tr>
+        <td>주의</td>
+        <td>제거된 외국어 본문은 LLM input에 다시 넣지 않는다. 대신 audit count와 paragraph id만 남긴다.</td>
+      </tr>
+      <tr>
+        <td>받을 output</td>
+        <td>제목, scripture epigraph, sermon orientation, definition/explanation unit을 atomic paragraph로 묶은 결과.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <pre><code class="language-json">{
+  "source_type": "docx",
+  "removed_foreign_paragraphs": 81,
+  "extraction_notes": [
+    "DOCX word/document.xml parsed by paragraph.",
+    "Foreign translation paragraphs removed by script-ratio heuristic.",
+    "raw_paragraphs=162"
+  ],
+  "instructions": [
+    "Do not infer boundaries from removed foreign paragraphs.",
+    "Treat rhetorical question and immediate answer as one semantic unit unless a new topic begins.",
+    "Preserve verse quotation and verse reference as one scripture_reading paragraph."
+  ]
+}</code></pre>
+
+  <h2>3. <code>hwp</code>: extraction warning을 입력 계약에 포함</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>항목</th>
+        <th>전략</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>입력 단위</td>
+        <td><code>libhwp</code>로 section과 paragraph를 순서대로 읽고 sentence unit을 만든다.</td>
+      </tr>
+      <tr>
+        <td>필수 metadata</td>
+        <td><code>hwp_version</code>, section id, <code>paragraph_index</code>, 추출 품질 warning, duplicate group 후보.</td>
+      </tr>
+      <tr>
+        <td>reasoning effort</td>
+        <td>짧은 smoke test는 <code>low</code>도 가능했지만, production label은 추출 warning이 있으면 <code>high</code>로 올린다.</td>
+      </tr>
+      <tr>
+        <td>주의</td>
+        <td>깨진 문자, 잘린 문장, 필사본/원본 중복을 LLM이 고치게 하지 않는다. 문제는 <code>quality_flags</code>로 표시하게 한다.</td>
+      </tr>
+      <tr>
+        <td>받을 output</td>
+        <td>title/date line 분리, scripture reading cue, quotation, explanation cue, truncation/noise flag.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <pre><code class="language-json">{
+  "source_type": "hwp",
+  "extraction_notes": [
+    "HWP parsed with libhwp.",
+    "hwp_version=5.0.3.0",
+    "paragraphs=61"
+  ],
+  "instructions": [
+    "Do not repair possible extraction noise; flag it.",
+    "If the excerpt ends mid-discourse, do not invent a following boundary.",
+    "Separate scripture-reading setup, scripture quotation, and explanation cue when the transition is explicit."
+  ]
+}</code></pre>
+
+  <h2>담화 종류별 보정</h2>
+  <p>source_type은 파일 포맷이고, <code>document_kind</code>는 내용 장르다. 같은 DOCX라도 설교, 공지, 기도문은 boundary 기준이 다르다.</p>
+
+  <table class="compact">
+    <thead>
+      <tr>
+        <th>document_kind</th>
+        <th>추가 입력 hint</th>
+        <th>instruction 보정</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>sermon</code></td>
+        <td>본문 낭독, 해석, 예화, 적용, 기도 cue.</td>
+        <td>설교 담화 전환을 boundary_type으로 적극 분류.</td>
+      </tr>
+      <tr>
+        <td><code>lecture</code></td>
+        <td>장/절/번호, 질문-응답, 정의 문장.</td>
+        <td>열거와 정의 unit을 과분할하지 않음.</td>
+      </tr>
+      <tr>
+        <td><code>book_chapter</code></td>
+        <td>heading hierarchy, page id, 반복 header 후보.</td>
+        <td>heading은 강한 hint, page break는 약한 hint.</td>
+      </tr>
+      <tr>
+        <td><code>prayer</code></td>
+        <td>기도 시작/종결 표현, 아멘, 청원 전환.</td>
+        <td>짧은 청원문마다 split하지 않음.</td>
+      </tr>
+      <tr>
+        <td><code>notice</code></td>
+        <td>날짜, 장소, 대상, action item.</td>
+        <td>담화 boundary보다 항목 구조를 우선.</td>
+      </tr>
+      <tr>
+        <td><code>thesis</code></td>
+        <td>목차, 논문 heading, footnote/table 여부.</td>
+        <td>설교 특화 label보다 <code>topic_shift</code>, <code>enumeration_start</code> 중심.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═════════════ Chapter 04：结论 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">04 · Conclusions</div>
+  <h1>LLM instruction 작성법</h1>
+
+  <p class="lead">
+    system instruction은 역할과 금지를 짧게 고정하고, user instruction은 현재 batch의 포맷·품질·경계 판단 규칙을 담는다.
+    모델이 문단을 생성하게 만들지 말고, sentence id 위에서 판정하게 만든다.
+  </p>
+
+  <h2>권장 system instruction</h2>
+  <pre><code class="language-text">You annotate Korean sermon discourse boundaries for RAG preprocessing.
+Do not rewrite, summarize, translate, or normalize the sermon text.
+Use only sentence_id references when proposing boundaries.
+Return split_after for every provided sentence.
+Prefer atomic semantic paragraphs, preserve scripture quotations with their references,
+and mark boundary_type from the allowed taxonomy.
+If metadata and semantics conflict, explain the conflict in rationale or quality_flags.</code></pre>
+
+  <h2>공통 user instruction</h2>
+  <pre><code class="language-json">[
+  "Return one boundary_annotations item for every provided sentence.",
+  "Use boundary_type='none' when split_after=false.",
+  "Keep Bible quotation spans together with verse references where possible.",
+  "Treat headings, original paragraphs, and page boundaries as hints, not gold labels.",
+  "Do not infer a split after the final sentence unless the boundary is explicit inside the excerpt.",
+  "Report extraction noise, duplicate headings, truncation, and uncertain language filtering in quality_flags."
+]</code></pre>
+
+  <h2>포맷별 instruction delta</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>source_type</th>
+        <th>추가 instruction</th>
+        <th>의도</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>datalab_parsed_json</code></td>
+        <td>HTML tag, heading_context, page_id를 보되 반복 heading은 quality flag로 분리.</td>
+        <td>구조 정보를 활용하되 OCR/page 노이즈를 정답으로 착각하지 않게 함.</td>
+      </tr>
+      <tr>
+        <td><code>docx</code></td>
+        <td>제거된 외국어 paragraph를 고려하지 말고, 남은 한국어 sequence 안에서만 판단.</td>
+        <td>병렬 번역 구조가 설교 담화 구조로 학습되는 것을 막음.</td>
+      </tr>
+      <tr>
+        <td><code>hwp</code></td>
+        <td>추출 오류를 고치지 말고 flag로 남김. sample truncation이면 마지막 boundary를 보수적으로 처리.</td>
+        <td>teacher label과 extraction QA를 분리함.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="takeaway">
+    <div class="takeaway-label">금지 prompt</div>
+    "문단을 보기 좋게 다시 나눠줘", "자연스러운 문단으로 재작성해줘", "원문을 다듬어서 출력해줘" 같은 지시는 쓰지 않는다.
+    이 프로젝트의 목표는 예쁜 문단 생성이 아니라 classifier 학습 가능한 <code>split_after</code> 라벨 생성이다.
+  </div>
+</section>
+
+<!-- ═════════════ Chapter 05：附录 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">05 · Appendix</div>
+  <h1>출력 JSON과 검수 규칙</h1>
+
+  <h2>필수 output shape</h2>
+  <p>LLM 응답은 strict JSON schema로 받는다. downstream classifier에는 <code>boundary_annotations</code>가, RAG chunk builder에는 <code>proposed_atomic_paragraphs</code>가 들어간다.</p>
+
+  <pre><code class="language-json">{
+  "document_id": "doc_id",
+  "source_type": "docx",
+  "reasoning_effort": "high",
+  "preprocessing_observations": [
+    "DOCX document.xml was parsed by paragraph."
+  ],
+  "boundary_annotations": [
+    {
+      "sentence_id": "doc.s0001",
+      "text_excerpt": "요약 excerpt",
+      "split_after": true,
+      "boundary_type": "scripture_explanation_start",
+      "confidence": 0.96,
+      "rationale": "성경 인용이 끝나고 해석이 시작된다."
+    }
+  ],
+  "proposed_atomic_paragraphs": [
+    {
+      "paragraph_id": "doc.p0001",
+      "sentence_ids": ["doc.s0001", "doc.s0002"],
+      "paragraph_role": "scripture_reading",
+      "reason": "본문과 절 reference를 같은 span으로 보존."
+    }
+  ],
+  "quality_flags": [
+    "scripture_reference_kept_with_quote"
+  ]
+}</code></pre>
+
+  <h2>자동 검수 규칙</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>검수 항목</th>
+        <th>실패 조건</th>
+        <th>처리</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>coverage</td>
+        <td>입력 sentence 수와 <code>boundary_annotations</code> 수가 다름.</td>
+        <td>응답 폐기 후 같은 payload 재시도.</td>
+      </tr>
+      <tr>
+        <td>id integrity</td>
+        <td>없는 <code>sentence_id</code>를 참조하거나 id를 새로 만듦.</td>
+        <td>schema 통과 여부와 별개로 hard fail.</td>
+      </tr>
+      <tr>
+        <td>boundary consistency</td>
+        <td><code>split_after=false</code>인데 boundary_type이 <code>none</code>이 아님.</td>
+        <td>자동 수정하지 말고 재요청.</td>
+      </tr>
+      <tr>
+        <td>paragraph coverage</td>
+        <td><code>proposed_atomic_paragraphs</code>가 sentence를 누락하거나 중복 포함.</td>
+        <td>human review 또는 재요청.</td>
+      </tr>
+      <tr>
+        <td>scripture preservation</td>
+        <td>성경 본문과 바로 붙은 절 reference를 불필요하게 분리.</td>
+        <td>검수 큐로 보냄.</td>
+      </tr>
+      <tr>
+        <td>confidence routing</td>
+        <td>confidence &lt; 0.75, extraction warning, duplicate heading flag.</td>
+        <td>human adjudication 우선 샘플.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>학습 데이터 row로 변환</h2>
+  <pre><code class="language-json">{
+  "left_sentence_id": "doc.s0004",
+  "right_sentence_id": "doc.s0005",
+  "split_after_left": true,
+  "boundary_type": "topic_shift",
+  "teacher_confidence": 0.84,
+  "source_type": "datalab_parsed_json",
+  "document_kind": "book_chapter",
+  "features": {
+    "left_block_type": "paragraph",
+    "right_block_type": "paragraph",
+    "html_boundary_before_right": true,
+    "same_original_paragraph": true,
+    "heading_context_depth": 2
+  },
+  "review_status": "teacher_only | human_checked | adjudicated"
+}</code></pre>
+
+  <h2>최종 운영 원칙</h2>
+  <ol>
+    <li>LLM batch는 40-80 sentence window로 자르고, 앞뒤 2 sentence context를 추가하되 target id만 annotate하게 한다.</li>
+    <li>문서별 첫 batch에는 제목, 파일명에서 추출한 날짜/시리즈, document_kind를 넣어 담화 맥락을 준다.</li>
+    <li>teacher label을 gold로 바로 쓰지 않고, 낮은 confidence와 quality_flags가 있는 샘플을 human adjudication으로 보낸다.</li>
+    <li>atomic paragraph와 RAG chunk를 분리한다. LLM output은 atomic paragraph까지이고, retrieval chunk는 후처리 merge가 만든다.</li>
+  </ol>
+
+  <h2>참조한 로컬 자료</h2>
+  <ul>
+    <li><code>docs/reviews/sermon_data_preprocessing_strategy_260526.html</code></li>
+    <li><code>docs/reviews/sermon_rag_segmentation_prior_work_260526.html</code></li>
+    <li><code>tests/openai_preprocessing_comparison.py</code></li>
+    <li><code>tests/results/20260527_185341/comparison.md</code></li>
+    <li><code>tests/results/20260527_185341/inputs/*.payload.json</code></li>
+    <li><code>tests/results/20260527_185341/responses/*.output.json</code></li>
+  </ul>
+</section>
+
+</body>
+</html>
