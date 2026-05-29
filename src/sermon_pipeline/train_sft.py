@@ -267,6 +267,40 @@ def _load_candidates(dataset_dir: Path, family: str, split: str) -> list[dict[st
     return candidates
 
 
+def _cache_candidate_features(candidates: list[dict[str, Any]]) -> None:
+    for candidate in candidates:
+        candidate["features"] = _feature_dict(
+            str(candidate["text"]), int(candidate["sentence_number"])
+        )
+
+
+def _limit_training_candidates(
+    candidates: list[dict[str, Any]],
+    max_candidates: int | None,
+    seed: int,
+) -> list[dict[str, Any]]:
+    if max_candidates is None or max_candidates >= len(candidates):
+        return candidates
+    if max_candidates <= 0:
+        raise ValueError("max_train_candidates must be greater than zero")
+
+    rng = random.Random(seed)
+    boundary_candidates = [
+        candidate for candidate in candidates if candidate["label"] != "none"
+    ]
+    none_candidates = [candidate for candidate in candidates if candidate["label"] == "none"]
+    rng.shuffle(boundary_candidates)
+    rng.shuffle(none_candidates)
+    if len(boundary_candidates) >= max_candidates:
+        selected = boundary_candidates[:max_candidates]
+    else:
+        selected = boundary_candidates + none_candidates[
+            : max_candidates - len(boundary_candidates)
+        ]
+    rng.shuffle(selected)
+    return selected
+
+
 def _feature_dict(text: str, sentence_number: int) -> dict[str, float]:
     normalized = " ".join(text.strip().split())
     lowered = normalized.lower()
@@ -285,13 +319,13 @@ def _feature_dict(text: str, sentence_number: int) -> dict[str, float]:
         if cue in normalized:
             features[f"cue:contains:{cue}"] = 1.0
 
-    chars = normalized[:256]
+    chars = normalized[:96]
     for char in chars:
         if char.isspace():
             continue
         key = f"char:{char}"
         features[key] = min(features.get(key, 0.0) + 1.0, 4.0)
-    for index in range(max(0, len(chars) - 1)):
+    for index in range(min(max(0, len(chars) - 1), 48)):
         bigram = chars[index : index + 2]
         if bigram.strip():
             key = f"bigram:{bigram}"
@@ -377,7 +411,7 @@ def _evaluate_candidates(
     correct = 0
     by_example: dict[str, dict[str, Any]] = {}
     for candidate in candidates:
-        features = _feature_dict(candidate["text"], int(candidate["sentence_number"]))
+        features = candidate["features"]
         probabilities = _softmax(model.scores(features))
         gold_label = str(candidate["label"])
         predicted_label = max(model.labels, key=lambda label: probabilities[label])
@@ -447,6 +481,7 @@ def train_boundary_classifier(
     learning_rate: float = 0.05,
     weight_decay: float = 0.0,
     seed: int = 13,
+    max_train_candidates: int | None = None,
     wandb_run: WandbRunHandle | None = None,
 ) -> dict[str, Any]:
     if epochs <= 0:
@@ -456,6 +491,15 @@ def train_boundary_classifier(
     test_candidates = _load_candidates(dataset_dir, family, "test")
     if not train_candidates:
         raise ValueError(f"{dataset_dir / family / 'train.jsonl'} contains no examples")
+    original_train_candidate_count = len(train_candidates)
+    train_candidates = _limit_training_candidates(
+        train_candidates,
+        max_candidates=max_train_candidates,
+        seed=seed,
+    )
+    _cache_candidate_features(train_candidates)
+    _cache_candidate_features(validation_candidates)
+    _cache_candidate_features(test_candidates)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     metrics_path = out_dir / "metrics.jsonl"
@@ -479,7 +523,7 @@ def train_boundary_classifier(
             total_loss = 0.0
             correct = 0
             for candidate in epoch_candidates:
-                features = _feature_dict(candidate["text"], int(candidate["sentence_number"]))
+                features = candidate["features"]
                 loss, prediction = model.train_candidate(
                     features=features,
                     gold_label=str(candidate["label"]),
@@ -539,6 +583,8 @@ def train_boundary_classifier(
         "learning_rate": learning_rate,
         "weight_decay": weight_decay,
         "seed": seed,
+        "max_train_candidates": max_train_candidates,
+        "original_train_candidate_count": original_train_candidate_count,
         "train_candidate_count": len(train_candidates),
         "validation_candidate_count": len(validation_candidates),
         "test_candidate_count": len(test_candidates),
@@ -563,6 +609,7 @@ def write_training_summary(
     learning_rate: float = 0.05,
     weight_decay: float = 0.0,
     seed: int = 13,
+    max_train_candidates: int | None = None,
     wandb_backend: Any | None = None,
 ) -> dict[str, Any]:
     if env_file is not None:
@@ -581,6 +628,7 @@ def write_training_summary(
             "learning_rate": learning_rate,
             "weight_decay": weight_decay,
             "seed": seed,
+            "max_train_candidates": max_train_candidates,
         },
         backend=wandb_backend,
     )
@@ -591,11 +639,12 @@ def write_training_summary(
             out_dir=out_dir,
             family=family,
             epochs=epochs,
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            seed=seed,
-            wandb_run=wandb_run,
-        )
+        learning_rate=learning_rate,
+        weight_decay=weight_decay,
+        seed=seed,
+        max_train_candidates=max_train_candidates,
+        wandb_run=wandb_run,
+    )
     finally:
         wandb_run.finish()
     summary = {
@@ -622,6 +671,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--learning-rate", type=float, default=0.05)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=13)
+    parser.add_argument("--max-train-candidates", type=int)
     args = parser.parse_args(argv)
 
     summary = write_training_summary(
@@ -636,6 +686,7 @@ def main(argv: list[str] | None = None) -> int:
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
         seed=args.seed,
+        max_train_candidates=args.max_train_candidates,
     )
     print(f"out_dir: {args.out_dir}")
     print(f"training_status: {summary['training_status']}")

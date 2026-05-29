@@ -185,6 +185,7 @@ class TrainSftTests(unittest.TestCase):
                 epochs=3,
                 learning_rate=0.05,
                 seed=7,
+                max_train_candidates=1,
             )
 
             metric_lines = (out_dir / "metrics.jsonl").read_text(
@@ -193,6 +194,8 @@ class TrainSftTests(unittest.TestCase):
             model = json.loads((out_dir / "model.json").read_text(encoding="utf-8"))
 
         self.assertEqual(summary["epochs_completed"], 3)
+        self.assertEqual(summary["original_train_candidate_count"], 2)
+        self.assertEqual(summary["train_candidate_count"], 1)
         self.assertEqual(len(metric_lines), 3)
         self.assertEqual(model["model_type"], "linear_boundary_classifier")
         self.assertIn("topic_shift", model["weights"])
