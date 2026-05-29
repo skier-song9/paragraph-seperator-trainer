@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import copy
 import json
+from collections.abc import Mapping
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Iterable
 
 
@@ -57,7 +60,10 @@ class WindowSentence:
     global_sentence_index: int
     text: str
     role: str
-    hints: dict[str, Any]
+    hints: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "hints", _freeze_hints(self.hints))
 
     def to_teacher_payload(self) -> dict[str, Any]:
         return {
@@ -65,7 +71,7 @@ class WindowSentence:
             "source_sentence_id": self.source_sentence_id,
             "role": self.role,
             "text": self.text,
-            "hints": self.hints,
+            "hints": _json_copy(self.hints),
         }
 
     def to_mapping_payload(self) -> dict[str, Any]:
@@ -229,3 +235,27 @@ def build_teacher_windows(
                 )
             )
     return windows
+
+
+def _freeze_hints(hints: Mapping[str, Any]) -> Mapping[str, Any]:
+    return MappingProxyType({key: _freeze_value(value) for key, value in hints.items()})
+
+
+def _freeze_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {key: _freeze_value(item) for key, item in value.items()}
+        )
+    if isinstance(value, list | tuple):
+        return tuple(_freeze_value(item) for item in value)
+    return copy.deepcopy(value)
+
+
+def _json_copy(value: Any) -> Any:
+    if isinstance(value, tuple):
+        return [_json_copy(item) for item in value]
+    if isinstance(value, list):
+        return [_json_copy(item) for item in value]
+    if isinstance(value, Mapping):
+        return {key: _json_copy(item) for key, item in value.items()}
+    return copy.deepcopy(value)

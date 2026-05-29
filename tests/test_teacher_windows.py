@@ -97,6 +97,20 @@ class TeacherWindowTests(unittest.TestCase):
         self.assertEqual(task["sentences"][0]["text"], "0번 문장.")
         self.assertIn("hints", task["sentences"][0])
 
+    def test_mutating_returned_teacher_task_hints_does_not_change_window(self) -> None:
+        records = [_row("doc-a", index, f"{index}번 문장.") for index in range(2)]
+        window = build_teacher_windows(load_sentence_records_from_rows(records), target_size=2)[
+            0
+        ]
+
+        task = window.to_teacher_task()
+        self.assertEqual(task["sentences"][0]["hints"]["heading_context"], ["heading"])
+        task["sentences"][0]["hints"]["heading_context"].append("changed")
+        task["sentences"][0]["hints"]["paragraph_index"] = 99
+
+        self.assertEqual(window.sentences[0].hints["heading_context"], ("heading",))
+        self.assertEqual(window.sentences[0].hints["paragraph_index"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
