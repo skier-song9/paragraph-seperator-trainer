@@ -5,6 +5,7 @@ import zipfile
 from pathlib import Path
 
 from sermon_pipeline.cli import run
+from sermon_pipeline.teacher_batch import main as teacher_batch_main
 
 
 class FakeChar:
@@ -39,6 +40,50 @@ class FakeReader:
 
 
 class CliSmokeTests(unittest.TestCase):
+    def test_teacher_batch_main_writes_batch_requests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sentences_path = root / "sentences.jsonl"
+            out_dir = root / "teacher_batch"
+            rows = [
+                {
+                    "document_id": "doc-a",
+                    "sentence_id": f"doc-a.s{index:04d}",
+                    "sentence_index": index,
+                    "text": f"{index}번 문장.",
+                    "source_path": "datas/doc-a.json",
+                    "document_source_type": "datalab_parsed_json",
+                    "document_kind": "book_chapter",
+                    "block_type": "paragraph",
+                    "source_tag": "p",
+                    "page_id": "1",
+                    "paragraph_index": index,
+                    "heading_context": [],
+                    "html_boundary_before": False,
+                }
+                for index in range(3)
+            ]
+            sentences_path.write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+
+            status = teacher_batch_main(
+                [
+                    "--sentences",
+                    str(sentences_path),
+                    "--out-dir",
+                    str(out_dir),
+                    "--target-size",
+                    "2",
+                    "--limit-windows",
+                    "1",
+                ]
+            )
+
+            self.assertEqual(status, 0)
+            self.assertTrue((out_dir / "batch_requests.jsonl").exists())
+
     def test_run_dry_run_writes_payloads_and_comparison(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
