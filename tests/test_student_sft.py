@@ -161,6 +161,44 @@ class StudentSftTests(unittest.TestCase):
         self.assertEqual(len(first_files), 3)
         self.assertEqual(len(mapping_lines), 1)
 
+    def test_build_sft_datasets_skips_empty_candidate_windows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            annotations_path = root / "teacher_annotations.jsonl"
+            windows_path = root / "windows.jsonl"
+            out_dir = root / "sft"
+            mapping = _mapping()
+            mapping["custom_id"] = "teacher:doc-a:w0001:3-4"
+            mapping["target_local_sids"] = []
+            mapping["local_to_source"] = {}
+            annotation = {
+                "custom_id": "teacher:doc-a:w0001:3-4",
+                "boundary_annotations": [],
+                "quality_flags": [],
+            }
+            annotations_path.write_text(
+                json.dumps(annotation, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            windows_path.write_text(
+                json.dumps(mapping, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+
+            summary = build_sft_datasets(
+                annotations_path=annotations_path,
+                windows_path=windows_path,
+                out_dir=out_dir,
+            )
+
+            sparse_train = out_dir / "sparse_multi_boundary" / "train.jsonl"
+            sparse_train_text = sparse_train.read_text(encoding="utf-8")
+            mappings = (out_dir / "mappings.jsonl").read_text(encoding="utf-8")
+
+        self.assertEqual(summary["example_count"], 0)
+        self.assertEqual(summary["skipped_empty_candidate_count"], 1)
+        self.assertEqual(sparse_train_text, "")
+        self.assertEqual(mappings, "")
+
     def test_load_jsonl_by_custom_id_rejects_duplicates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "rows.jsonl"

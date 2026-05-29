@@ -585,17 +585,19 @@ def write_training_summary(
         backend=wandb_backend,
     )
     wandb_run.log(flatten_wandb_metrics(dataset_summary), step=0)
-    training = train_boundary_classifier(
-        dataset_dir=dataset_dir,
-        out_dir=out_dir,
-        family=family,
-        epochs=epochs,
-        learning_rate=learning_rate,
-        weight_decay=weight_decay,
-        seed=seed,
-        wandb_run=wandb_run,
-    )
-    wandb_run.finish()
+    try:
+        training = train_boundary_classifier(
+            dataset_dir=dataset_dir,
+            out_dir=out_dir,
+            family=family,
+            epochs=epochs,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            seed=seed,
+            wandb_run=wandb_run,
+        )
+    finally:
+        wandb_run.finish()
     summary = {
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "training_status": "trained_linear_boundary_classifier",
