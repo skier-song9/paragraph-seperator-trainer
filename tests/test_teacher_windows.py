@@ -93,6 +93,7 @@ class TeacherWindowTests(unittest.TestCase):
         self.assertEqual(
             mapping["local_to_source"]["S1"]["source_sentence_id"], "doc-a.s0000"
         )
+        self.assertEqual(mapping["local_to_source"]["S1"]["text"], "0번 문장.")
         self.assertEqual(task["sentences"][0]["local_sid"], "S1")
         self.assertEqual(task["sentences"][0]["text"], "0번 문장.")
         self.assertIn("hints", task["sentences"][0])

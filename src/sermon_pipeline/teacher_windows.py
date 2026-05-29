@@ -79,6 +79,7 @@ class WindowSentence:
             "source_sentence_id": self.source_sentence_id,
             "global_sentence_index": self.global_sentence_index,
             "role": self.role,
+            "text": self.text,
         }
 
 
