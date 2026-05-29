@@ -15,6 +15,7 @@ hwp = [
 sermon-preprocessing-comparison = "sermon_pipeline.cli:main"
 sermon-dataset-build = "sermon_pipeline.dataset:main"
 sermon-teacher-batch-build = "sermon_pipeline.teacher_batch:main"
+sermon-teacher-batch-ingest = "sermon_pipeline.teacher_ingest:main"
 
 [build-system]
 requires = ["hatchling"]
