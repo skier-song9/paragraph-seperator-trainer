@@ -1,9 +1,11 @@
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from sermon_pipeline.extractors.datalab import parse_datalab_json
+from sermon_pipeline.extractors.docx import extract_docx_paragraphs, parse_docx
 
 
 class DatalabExtractorTests(unittest.TestCase):
@@ -78,6 +80,36 @@ class DatalabExtractorTests(unittest.TestCase):
         self.assertEqual(document.sentences[0].sentence_id, "nested_sample.s0000")
         self.assertEqual(document.blocks[0].page_id, "0")
         self.assertTrue(document.blocks[0].html_boundary_before)
+
+
+class DocxExtractorTests(unittest.TestCase):
+    def test_extract_docx_paragraphs_reads_word_document_xml(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sample.docx"
+            document_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>제10장 세마포</w:t></w:r></w:p>
+    <w:p><w:r><w:t>English translation paragraph should be removed.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>이제 성소가 완성되는 과정에서 남은 것은 세마포와 은받침입니다.</w:t></w:r></w:p>
+  </w:body>
+</w:document>"""
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("word/document.xml", document_xml)
+
+            paragraphs = extract_docx_paragraphs(path)
+            document = parse_docx(
+                path, root=Path(tmp), document_id="docx_sample", max_sentences=8
+            )
+
+        self.assertEqual(paragraphs[0], "제10장 세마포")
+        self.assertEqual(document.source_type, "docx")
+        self.assertEqual(document.removed_foreign_paragraphs, 1)
+        self.assertEqual(len(document.blocks), 2)
+        self.assertEqual(document.blocks[0].paragraph_index, 0)
+        self.assertEqual(document.blocks[1].paragraph_index, 2)
+        self.assertEqual(document.blocks[0].language_filter_reason, "hangul_present")
+        self.assertEqual(document.sentences[0].sentence_id, "docx_sample.s0000")
 
 
 if __name__ == "__main__":
