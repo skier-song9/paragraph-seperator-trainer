@@ -22,6 +22,8 @@ def split_blocks_into_sentences(
     sentences: list[SentenceUnit] = []
     for block in blocks:
         for sent in _split_text(block.text):
+            if max_sentences is not None and len(sentences) >= max_sentences:
+                return sentences
             sentence_id = f"{document_id}.s{len(sentences):04d}"
             sentences.append(
                 SentenceUnit(
@@ -36,6 +38,4 @@ def split_blocks_into_sentences(
                     html_boundary_before=block.html_boundary_before,
                 )
             )
-            if max_sentences is not None and len(sentences) >= max_sentences:
-                return sentences
     return sentences

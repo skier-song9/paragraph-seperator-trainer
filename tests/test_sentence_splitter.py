@@ -43,6 +43,18 @@ class SentenceSplitterTests(unittest.TestCase):
         self.assertEqual(sentences[0].sentence_id, "hwp_sample.s0000")
         self.assertEqual(sentences[2].sentence_id, "hwp_sample.s0002")
 
+    def test_zero_max_sentences_returns_empty_list(self):
+        block = SourceBlock(
+            block_id="html.b0001",
+            text="첫 문장입니다. 둘째 문장입니다.",
+            block_type="paragraph",
+            source_tag="p",
+        )
+
+        sentences = split_blocks_into_sentences([block], "sample", max_sentences=0)
+
+        self.assertEqual(sentences, [])
+
 
 if __name__ == "__main__":
     unittest.main()
