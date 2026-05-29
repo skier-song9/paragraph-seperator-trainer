@@ -31,6 +31,14 @@ class TextTests(unittest.TestCase):
         self.assertEqual(reason, "latin_dominant_foreign")
         self.assertGreater(counts["latin"], 20)
 
+    def test_classify_korean_paragraph_counts_accented_latin_as_foreign(self):
+        text = "Esta traducción contiene palabras en español con acentos y puntuación suficiente."
+        self.assertEqual(script_counts("áéñüĀāƀƁ")["latin"], 8)
+        keep, counts, reason = classify_korean_paragraph(text)
+        self.assertFalse(keep)
+        self.assertEqual(reason, "latin_dominant_foreign")
+        self.assertGreaterEqual(counts["latin"], 20)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -26,7 +26,14 @@ def script_counts(text: str) -> dict[str, int]:
             counts["hangul"] += 1
         elif 0x4E00 <= cp <= 0x9FFF:
             counts["han"] += 1
-        elif ("A" <= ch <= "Z") or ("a" <= ch <= "z"):
+        elif (
+            0x0041 <= cp <= 0x005A
+            or 0x0061 <= cp <= 0x007A
+            or 0x00C0 <= cp <= 0x00D6
+            or 0x00D8 <= cp <= 0x00F6
+            or 0x00F8 <= cp <= 0x00FF
+            or 0x0100 <= cp <= 0x024F
+        ):
             counts["latin"] += 1
         elif 0x0370 <= cp <= 0x03FF:
             counts["greek"] += 1
