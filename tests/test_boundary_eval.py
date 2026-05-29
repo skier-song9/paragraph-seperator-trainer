@@ -16,6 +16,11 @@ class BoundaryEvalTests(unittest.TestCase):
         self.assertEqual(parsed.boundaries, [])
         self.assertEqual(parsed.issues, [])
 
+    def test_parse_reports_empty_output(self) -> None:
+        parsed = parse_student_output(" \n\t ", valid_local_sids={"S1"})
+        self.assertEqual(parsed.boundaries, [])
+        self.assertEqual([issue["code"] for issue in parsed.issues], ["invalid_line"])
+
     def test_parse_sparse_boundaries(self) -> None:
         parsed = parse_student_output("S2 topic_shift\nS5 application_start", valid_local_sids={"S1", "S2", "S5"})
         self.assertEqual([(item.local_sid, item.boundary_type) for item in parsed.boundaries], [("S2", "topic_shift"), ("S5", "application_start")])

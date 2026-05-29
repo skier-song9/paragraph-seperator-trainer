@@ -21,6 +21,11 @@ class ParsedOutput:
 
 def parse_student_output(output: str, valid_local_sids: set[str]) -> ParsedOutput:
     text = output.strip()
+    if not text:
+        return ParsedOutput(
+            boundaries=[],
+            issues=[{"code": "invalid_line", "line_number": 1, "line": output}],
+        )
     if text == "NO_BOUNDARY":
         return ParsedOutput(boundaries=[], issues=[])
 
