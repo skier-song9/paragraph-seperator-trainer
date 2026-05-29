@@ -47,6 +47,38 @@ class DatalabExtractorTests(unittest.TestCase):
             ["인간의 기준은 인간의 양심이고 하나님의 기준은 하나님이 양심이다"],
         )
 
+    def test_parse_datalab_json_preserves_nested_kept_tag_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "nested.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "success": True,
+                        "page_count": 1,
+                        "html": (
+                            '<div data-page-id="0"><ul><li>바깥 설명 '
+                            "<span>중간</span><li>안쪽 설명입니다.</li> 끝입니다."
+                            "</li></ul></div>"
+                        ),
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            document = parse_datalab_json(
+                path, root=Path(tmp), document_id="nested_sample", max_sentences=8
+            )
+
+        block_texts = [block.text for block in document.blocks]
+        self.assertTrue(
+            any("바깥 설명" in text and "끝입니다" in text for text in block_texts)
+        )
+        self.assertTrue(any("안쪽 설명입니다" in text for text in block_texts))
+        self.assertEqual(document.sentences[0].sentence_id, "nested_sample.s0000")
+        self.assertEqual(document.blocks[0].page_id, "0")
+        self.assertTrue(document.blocks[0].html_boundary_before)
+
 
 if __name__ == "__main__":
     unittest.main()

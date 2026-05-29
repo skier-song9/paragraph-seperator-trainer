@@ -16,45 +16,49 @@ class DatalabHTMLParser(HTMLParser):
         self.blocks: list[SourceBlock] = []
         self.page_id: str | None = None
         self.heading_context: list[str] = []
-        self.current: dict[str, Any] | None = None
+        self.stack: list[dict[str, Any]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = dict(attrs)
         if tag == "div" and attrs_dict.get("data-page-id") is not None:
             self.page_id = attrs_dict.get("data-page-id")
         if tag in {"h1", "h2", "h3", "p", "li", "td", "th"}:
-            self.current = {
-                "tag": tag,
-                "page_id": self.page_id,
-                "heading_context": list(self.heading_context[-3:]),
-                "parts": [],
-            }
-        if tag == "br" and self.current is not None:
-            self.current["parts"].append("\n")
+            self.stack.append(
+                {
+                    "tag": tag,
+                    "page_id": self.page_id,
+                    "heading_context": list(self.heading_context[-3:]),
+                    "parts": [],
+                }
+            )
+        if tag == "br" and self.stack:
+            self.stack[-1]["parts"].append("\n")
 
     def handle_data(self, data: str) -> None:
-        if self.current is not None:
-            self.current["parts"].append(data)
+        if self.stack:
+            self.stack[-1]["parts"].append(data)
 
     def handle_endtag(self, tag: str) -> None:
-        if self.current is None or tag != self.current["tag"]:
+        if not self.stack or tag != self.stack[-1]["tag"]:
             return
-        parts = self.current["parts"]
+        current = self.stack.pop()
+        parts = current["parts"]
         text = normalize_ws(" ".join(str(part) for part in parts))
-        source_tag = str(self.current["tag"])
+        source_tag = str(current["tag"])
         if text and not is_layout_noise(text):
             block = SourceBlock(
                 block_id=f"html.b{len(self.blocks):04d}",
                 text=text,
                 block_type="heading" if source_tag.startswith("h") else "paragraph",
                 source_tag=source_tag,
-                page_id=self.current["page_id"],
-                heading_context=list(self.current["heading_context"]),
+                page_id=current["page_id"],
+                heading_context=list(current["heading_context"]),
             )
             self.blocks.append(block)
             if source_tag.startswith("h"):
                 self.heading_context.append(text)
-        self.current = None
+        if self.stack:
+            self.stack[-1]["parts"].append(text)
 
 
 def _mark_html_boundaries(blocks: list[SourceBlock]) -> list[SourceBlock]:
