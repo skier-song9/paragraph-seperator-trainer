@@ -21,3 +21,9 @@ Run the preprocessing dry run:
 ```bash
 uv run sermon-preprocessing-comparison --dry-run --max-sentences 8
 ```
+
+Build the extraction dataset from `datas/`:
+
+```bash
+uv run sermon-dataset-build
+```

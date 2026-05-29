@@ -13,6 +13,7 @@ hwp = [
 
 [project.scripts]
 sermon-preprocessing-comparison = "sermon_pipeline.cli:main"
+sermon-dataset-build = "sermon_pipeline.dataset:main"
 
 [build-system]
 requires = ["hatchling"]

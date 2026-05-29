@@ -112,7 +112,7 @@ class DocxExtractorTests(unittest.TestCase):
         self.assertEqual(document.sentences[0].sentence_id, "docx_sample.s0000")
 
 
-from sermon_pipeline.extractors.hwp import parse_hwp
+from sermon_pipeline.extractors.hwp import extract_hwp_paragraphs, parse_hwp
 
 
 class FakeChar:
@@ -146,6 +146,14 @@ class FakeReader:
         ]
 
 
+class SurrogateReader:
+    version = "5.0.3.0"
+
+    def __init__(self, path):
+        self.path = path
+        self.sections = [FakeSection(["정상 문장\ud800입니다."])]
+
+
 class HwpExtractorTests(unittest.TestCase):
     def test_parse_hwp_uses_injected_reader_and_keeps_version_note(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -166,6 +174,17 @@ class HwpExtractorTests(unittest.TestCase):
         self.assertEqual(len(document.blocks), 2)
         self.assertEqual(document.blocks[0].source_tag, "hwp_paragraph")
         self.assertEqual(document.sentences[0].sentence_id, "hwp_sample.s0000")
+
+    def test_extract_hwp_paragraphs_removes_surrogate_codepoints(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "surrogate.hwp"
+            path.write_bytes(b"HWP fixture bytes")
+
+            paragraphs, version = extract_hwp_paragraphs(path, SurrogateReader)
+
+        self.assertEqual(version, "5.0.3.0")
+        self.assertEqual(paragraphs, ["정상 문장입니다."])
+        paragraphs[0].encode("utf-8")
 
 
 if __name__ == "__main__":

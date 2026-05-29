@@ -8,6 +8,10 @@ from sermon_pipeline.sentence_splitter import split_blocks_into_sentences
 from sermon_pipeline.text import normalize_ws
 
 
+def _is_text_codepoint(code: int) -> bool:
+    return code > 0 and not 0xD800 <= code <= 0xDFFF
+
+
 def load_libhwp_reader(path: str) -> Any:
     import libhwp
 
@@ -23,7 +27,10 @@ def extract_hwp_paragraphs(
         for para in section.paragraphs:
             chars: list[str] = []
             for ch in para.chars:
-                if getattr(ch, "kind", None) == "char_code" and getattr(ch, "code", 0):
+                code = getattr(ch, "code", 0)
+                if getattr(ch, "kind", None) == "char_code" and _is_text_codepoint(
+                    code
+                ):
                     chars.append(chr(ch.code))
             text = normalize_ws("".join(chars))
             if text:
