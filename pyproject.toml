@@ -1,0 +1,22 @@
+[project]
+name = "paragraph-seperator-trainer"
+version = "0.1.0"
+description = "Source-aware sermon paragraph boundary annotation pipeline."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+hwp = [
+  "libhwp==0.2.0",
+]
+
+[project.scripts]
+sermon-preprocessing-comparison = "sermon_pipeline.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sermon_pipeline"]
