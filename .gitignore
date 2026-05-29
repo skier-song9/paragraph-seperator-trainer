@@ -229,6 +229,7 @@ Icon?
 # Project data and generated outputs
 datas/
 outputs/
+wandb/
 
 # Local planning and specs
 docs/specs/

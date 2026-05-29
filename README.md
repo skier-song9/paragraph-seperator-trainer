@@ -57,3 +57,28 @@ uv run sermon-sft-build \
   --windows tests/results/teacher_batch_20260529_000000/windows.jsonl \
   --out-dir tests/results/student_sft_20260529_000000
 ```
+
+Build a small silver smoke SFT dataset from existing windows:
+
+```bash
+uv run sermon-silver-annotations-build \
+  --windows tests/results/teacher_batch_smoke/windows.jsonl \
+  --out-dir tests/results/silver_annotations_smoke_20260529 \
+  --limit 2
+
+uv run sermon-sft-build \
+  --annotations tests/results/silver_annotations_smoke_20260529/teacher_annotations.jsonl \
+  --windows tests/results/teacher_batch_smoke/windows.jsonl \
+  --out-dir tests/results/student_sft_smoke_20260529
+```
+
+Log an SFT training smoke run to W&B:
+
+```bash
+uv run --extra train sermon-sft-train-smoke \
+  --dataset-dir tests/results/student_sft_smoke_20260529 \
+  --out-dir tests/results/train_smoke_20260529 \
+  --wandb-mode offline \
+  --wandb-project sermon-boundary-sft \
+  --run-name smoke-20260529
+```

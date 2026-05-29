@@ -10,13 +10,18 @@ dependencies = []
 hwp = [
   "libhwp==0.2.0",
 ]
+train = [
+  "wandb>=0.17.0",
+]
 
 [project.scripts]
 sermon-preprocessing-comparison = "sermon_pipeline.cli:main"
 sermon-dataset-build = "sermon_pipeline.dataset:main"
 sermon-teacher-batch-build = "sermon_pipeline.teacher_batch:main"
 sermon-teacher-batch-ingest = "sermon_pipeline.teacher_ingest:main"
+sermon-silver-annotations-build = "sermon_pipeline.silver_annotations:main"
 sermon-sft-build = "sermon_pipeline.student_sft:main"
+sermon-sft-train-smoke = "sermon_pipeline.train_sft:main"
 
 [build-system]
 requires = ["hatchling"]
