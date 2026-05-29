@@ -15,7 +15,7 @@ TEACHER_SYSTEM_PROMPT = (
     "JSON that matches the provided schema."
 )
 
-TEACHER_INSTRUCTIONS = [
+_TEACHER_INSTRUCTIONS = [
     "Return one annotation for every target_local_sid.",
     "Use boundary_type='none' when split_after=false.",
     "Use a non-none boundary_type when split_after=true.",
@@ -70,7 +70,7 @@ def _render_teacher_user_content(window: TeacherWindow) -> str:
         f"<{sentence.local_sid}> {sentence.text}" for sentence in window.sentences
     ]
     task["allowed_boundary_types"] = list(BOUNDARY_TYPES)
-    task["instructions"] = list(TEACHER_INSTRUCTIONS)
+    task["instructions"] = list(_TEACHER_INSTRUCTIONS)
     return json.dumps(task, ensure_ascii=False, indent=2)
 
 
