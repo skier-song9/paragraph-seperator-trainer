@@ -46,8 +46,9 @@ def parse_student_output(output: str, valid_local_sids: set[str]) -> ParsedOutpu
         if sentence_number is None:
             issues.append(
                 {
-                    "code": "invalid_local_sid",
+                    "code": "invalid_line",
                     "line_number": line_number,
+                    "line": raw_line,
                     "local_sid": local_sid,
                 }
             )
@@ -89,7 +90,7 @@ def parse_student_output(output: str, valid_local_sids: set[str]) -> ParsedOutpu
         ):
             issues.append(
                 {
-                    "code": "non_ascending_local_sid",
+                    "code": "not_ascending",
                     "line_number": line_number,
                     "local_sid": local_sid,
                 }
@@ -137,9 +138,9 @@ def boundary_f1(
     f1 = 0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall)
 
     return {
-        "true_positive": true_positive,
-        "false_positive": false_positive,
-        "false_negative": false_negative,
+        "tp": true_positive,
+        "fp": false_positive,
+        "fn": false_negative,
         "precision": precision,
         "recall": recall,
         "f1": f1,
