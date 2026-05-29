@@ -123,6 +123,98 @@ class TeacherIngestTests(unittest.TestCase):
 
         self.assertEqual(codes.count("invalid_split_after"), 2)
 
+    def test_validate_annotation_rejects_missing_quality_flags(self) -> None:
+        annotation = _annotation()
+        del annotation["quality_flags"]
+
+        issues = validate_annotation(_mapping(), annotation)
+        codes = [issue["code"] for issue in issues]
+
+        self.assertIn("missing_required_field", codes)
+        self.assertIn(
+            {
+                "code": "missing_required_field",
+                "path": "$",
+                "field": "quality_flags",
+            },
+            issues,
+        )
+
+    def test_validate_annotation_rejects_missing_item_rationale(self) -> None:
+        annotation = _annotation()
+        del annotation["boundary_annotations"][1]["rationale"]
+
+        issues = validate_annotation(_mapping(), annotation)
+
+        self.assertIn(
+            {
+                "code": "missing_required_field",
+                "path": "$.boundary_annotations[1]",
+                "field": "rationale",
+            },
+            issues,
+        )
+
+    def test_validate_annotation_rejects_extra_fields(self) -> None:
+        annotation = _annotation()
+        annotation["unexpected"] = True
+        annotation["boundary_annotations"][0]["unexpected"] = True
+
+        issues = validate_annotation(_mapping(), annotation)
+
+        self.assertIn(
+            {
+                "code": "additional_property",
+                "path": "$",
+                "field": "unexpected",
+            },
+            issues,
+        )
+        self.assertIn(
+            {
+                "code": "additional_property",
+                "path": "$.boundary_annotations[0]",
+                "field": "unexpected",
+            },
+            issues,
+        )
+
+    def test_ingest_batch_results_counts_each_validation_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            windows_path = root / "windows.jsonl"
+            batch_output_path = root / "batch_output.jsonl"
+            out_dir = root / "ingested"
+            annotation = _annotation()
+            annotation["boundary_annotations"][0]["split_after"] = "false"
+            annotation["boundary_annotations"][0]["confidence"] = 2
+            windows_path.write_text(
+                json.dumps(_mapping(), ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+            batch_output_path.write_text(
+                json.dumps(
+                    _batch_response_row("teacher:doc-a:w0000:0-3", annotation),
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = ingest_batch_results(
+                windows_path=windows_path,
+                batch_output_path=batch_output_path,
+                out_dir=out_dir,
+            )
+            issue_rows = [
+                json.loads(line)
+                for line in (out_dir / "teacher_validation_issues.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+        self.assertEqual(summary["issue_count"], len(issue_rows[0]["issues"]))
+        self.assertGreater(len(issue_rows[0]["issues"]), 1)
+
     def test_ingest_batch_results_writes_annotations_review_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

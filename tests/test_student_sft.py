@@ -236,6 +236,72 @@ class StudentSftTests(unittest.TestCase):
 
             self.assertEqual(existing_train.read_text(encoding="utf-8"), "keep me\n")
 
+    def test_build_sft_datasets_preflight_rejects_unknown_local_sid_and_preserves_outputs(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            annotations_path = root / "teacher_annotations.jsonl"
+            windows_path = root / "windows.jsonl"
+            out_dir = root / "sft"
+            existing_train = out_dir / "sparse_multi_boundary" / "train.jsonl"
+            existing_train.parent.mkdir(parents=True)
+            existing_train.write_text("keep me\n", encoding="utf-8")
+            annotation = deepcopy(_annotation())
+            annotation["boundary_annotations"][1]["local_sid"] = "S99"
+            annotations_path.write_text(
+                json.dumps(annotation, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            windows_path.write_text(
+                json.dumps(_mapping(), ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "teacher:doc-a:w0000:0-3.*unknown_or_context_local_sid.*S99",
+            ):
+                build_sft_datasets(
+                    annotations_path=annotations_path,
+                    windows_path=windows_path,
+                    out_dir=out_dir,
+                )
+
+            self.assertEqual(existing_train.read_text(encoding="utf-8"), "keep me\n")
+
+    def test_build_sft_datasets_preflight_rejects_source_sentence_mismatch_and_preserves_outputs(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            annotations_path = root / "teacher_annotations.jsonl"
+            windows_path = root / "windows.jsonl"
+            out_dir = root / "sft"
+            existing_train = out_dir / "first_boundary" / "train.jsonl"
+            existing_train.parent.mkdir(parents=True)
+            existing_train.write_text("keep me\n", encoding="utf-8")
+            annotation = deepcopy(_annotation())
+            annotation["boundary_annotations"][1]["source_sentence_id"] = "doc-a.bad"
+            annotations_path.write_text(
+                json.dumps(annotation, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            windows_path.write_text(
+                json.dumps(_mapping(), ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "teacher:doc-a:w0000:0-3.*source_sentence_id_mismatch.*doc-a.bad",
+            ):
+                build_sft_datasets(
+                    annotations_path=annotations_path,
+                    windows_path=windows_path,
+                    out_dir=out_dir,
+                )
+
+            self.assertEqual(existing_train.read_text(encoding="utf-8"), "keep me\n")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,7 @@ from typing import Any
 
 from .constants import BOUNDARY_TYPES
 from .io import write_json
+from .teacher_ingest import validate_annotation
 
 STUDENT_LABELS = tuple(label for label in BOUNDARY_TYPES if label != "none")
 SPLITS = ("train", "validation", "test")
@@ -166,6 +167,9 @@ def build_sft_datasets(
 
         annotation = annotations[custom_id]
         mapping = mappings[custom_id]
+        issues = validate_annotation(mapping, annotation)
+        if issues:
+            raise ValueError(f"{custom_id}: validation issues: {issues}")
         document_id = str(mapping["document_id"])
         split = split_for_document(document_id)
         input_text = render_student_input(_sentences_from_mapping(mapping))

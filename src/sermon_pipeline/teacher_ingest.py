@@ -40,10 +40,65 @@ def _issue(code: str, **fields: Any) -> dict[str, Any]:
     return issue
 
 
+ROOT_KEYS = {"custom_id", "boundary_annotations", "quality_flags"}
+ANNOTATION_ITEM_KEYS = {
+    "local_sid",
+    "source_sentence_id",
+    "split_after",
+    "boundary_type",
+    "confidence",
+    "rationale",
+}
+
+
+def _validate_exact_keys(
+    value: dict[str, Any], allowed_keys: set[str], path: str
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    for field in sorted(allowed_keys - set(value)):
+        issues.append(_issue("missing_required_field", path=path, field=field))
+    for field in sorted(set(value) - allowed_keys):
+        issues.append(_issue("additional_property", path=path, field=field))
+    return issues
+
+
+def _validate_str_field(
+    value: dict[str, Any], field: str, path: str
+) -> list[dict[str, Any]]:
+    if field in value and not isinstance(value[field], str):
+        return [
+            _issue(
+                "invalid_field_type",
+                path=path,
+                field=field,
+                expected="str",
+                actual=type(value[field]).__name__,
+            )
+        ]
+    return []
+
+
 def validate_annotation(
     mapping: dict[str, Any], annotation: dict[str, Any]
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
+    issues.extend(_validate_exact_keys(annotation, ROOT_KEYS, "$"))
+    issues.extend(_validate_str_field(annotation, "custom_id", "$"))
+
+    quality_flags = annotation.get("quality_flags")
+    if "quality_flags" in annotation:
+        if not isinstance(quality_flags, list) or any(
+            not isinstance(flag, str) for flag in quality_flags
+        ):
+            issues.append(
+                _issue(
+                    "invalid_field_type",
+                    path="$",
+                    field="quality_flags",
+                    expected="list[str]",
+                    actual=type(quality_flags).__name__,
+                )
+            )
 
     mapping_custom_id = mapping.get("custom_id")
     annotation_custom_id = annotation.get("custom_id")
@@ -63,12 +118,52 @@ def validate_annotation(
 
     annotation_items = annotation.get("boundary_annotations", [])
     if not isinstance(annotation_items, list):
-        return [_issue("invalid_boundary_annotations")]
+        issues.append(
+            _issue(
+                "invalid_field_type",
+                path="$",
+                field="boundary_annotations",
+                expected="list",
+                actual=type(annotation_items).__name__,
+            )
+        )
+        issues.append(_issue("invalid_boundary_annotations"))
+        return issues
 
     for index, item in enumerate(annotation_items):
+        item_path = f"$.boundary_annotations[{index}]"
         if not isinstance(item, dict):
             issues.append(_issue("invalid_boundary_annotation_item", index=index))
             continue
+        issues.extend(_validate_exact_keys(item, ANNOTATION_ITEM_KEYS, item_path))
+        issues.extend(_validate_str_field(item, "local_sid", item_path))
+        issues.extend(_validate_str_field(item, "source_sentence_id", item_path))
+        issues.extend(_validate_str_field(item, "boundary_type", item_path))
+        issues.extend(_validate_str_field(item, "rationale", item_path))
+        if "split_after" in item and not isinstance(item["split_after"], bool):
+            issues.append(
+                _issue(
+                    "invalid_field_type",
+                    path=item_path,
+                    field="split_after",
+                    expected="bool",
+                    actual=type(item["split_after"]).__name__,
+                )
+            )
+        if "confidence" in item:
+            confidence_value = item["confidence"]
+            if isinstance(confidence_value, bool) or not isinstance(
+                confidence_value, (int, float)
+            ):
+                issues.append(
+                    _issue(
+                        "invalid_field_type",
+                        path=item_path,
+                        field="confidence",
+                        expected="number",
+                        actual=type(confidence_value).__name__,
+                    )
+                )
 
         local_sid = item.get("local_sid")
         if local_sid in seen:
@@ -237,7 +332,7 @@ def ingest_batch_results(
                             }
                         )
                     )
-                    issue_count += 1
+                    issue_count += len(issues)
                     continue
 
                 annotation_handle.write(_jsonl(annotation))
