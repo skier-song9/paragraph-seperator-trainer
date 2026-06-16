@@ -160,6 +160,7 @@ def build_sft_datasets(
         (family, split): [] for family in dataset_dirs for split in SPLITS
     }
     mapping_rows: list[dict[str, Any]] = []
+    skipped_empty_candidate_count = 0
 
     for custom_id in sorted(annotations):
         if custom_id not in mappings:
@@ -172,7 +173,11 @@ def build_sft_datasets(
             raise ValueError(f"{custom_id}: validation issues: {issues}")
         document_id = str(mapping["document_id"])
         split = split_for_document(document_id)
-        input_text = render_student_input(_sentences_from_mapping(mapping))
+        sentences = _sentences_from_mapping(mapping)
+        if not sentences:
+            skipped_empty_candidate_count += 1
+            continue
+        input_text = render_student_input(sentences)
         sparse_example_id = f"sparse:{custom_id}"
         first_example_id = f"first:{custom_id}"
 
@@ -234,7 +239,8 @@ def build_sft_datasets(
         "annotations_path": str(annotations_path),
         "windows_path": str(windows_path),
         "out_dir": str(out_dir),
-        "example_count": len(annotations),
+        "example_count": len(mapping_rows),
+        "skipped_empty_candidate_count": skipped_empty_candidate_count,
         "split_counts": split_counts,
     }
     write_json(out_dir / "sft_run_summary.json", summary)

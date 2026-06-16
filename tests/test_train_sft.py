@@ -10,6 +10,7 @@ from sermon_pipeline.train_sft import (
     flatten_wandb_metrics,
     log_wandb_summary,
     summarize_sft_dataset,
+    train_boundary_classifier,
     write_training_summary,
 )
 
@@ -126,7 +127,12 @@ class TrainSftTests(unittest.TestCase):
             dataset_dir = root / "dataset"
             out_dir = root / "train"
             _write_example(
-                dataset_dir / "sparse_multi_boundary" / "test.jsonl",
+                dataset_dir / "sparse_multi_boundary" / "train.jsonl",
+                "S1 topic_shift",
+                "sparse_multi_boundary",
+            )
+            _write_example(
+                dataset_dir / "sparse_multi_boundary" / "validation.jsonl",
                 "NO_BOUNDARY",
                 "sparse_multi_boundary",
             )
@@ -137,14 +143,93 @@ class TrainSftTests(unittest.TestCase):
                 wandb_mode="disabled",
                 wandb_project="sermon-test",
                 run_name="dry-run",
+                epochs=2,
             )
 
             written = json.loads(
                 (out_dir / "train_run_summary.json").read_text(encoding="utf-8")
             )
+            model_exists = (out_dir / "model.json").exists()
 
-        self.assertEqual(summary["dataset"]["total_examples"], 1)
+        self.assertEqual(summary["dataset"]["total_examples"], 2)
+        self.assertEqual(summary["training_status"], "trained_linear_boundary_classifier")
+        self.assertEqual(summary["training"]["epochs_completed"], 2)
         self.assertEqual(written["wandb"]["mode"], "disabled")
+        self.assertTrue(model_exists)
+
+    def test_train_boundary_classifier_writes_epoch_metrics_and_model(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            dataset_dir = root / "dataset"
+            out_dir = root / "train"
+            _write_example(
+                dataset_dir / "sparse_multi_boundary" / "train.jsonl",
+                "S1 topic_shift",
+                "sparse_multi_boundary",
+            )
+            _write_example(
+                dataset_dir / "sparse_multi_boundary" / "train.jsonl",
+                "NO_BOUNDARY",
+                "sparse_multi_boundary",
+            )
+            _write_example(
+                dataset_dir / "sparse_multi_boundary" / "validation.jsonl",
+                "S1 topic_shift",
+                "sparse_multi_boundary",
+            )
+
+            summary = train_boundary_classifier(
+                dataset_dir=dataset_dir,
+                out_dir=out_dir,
+                family="sparse_multi_boundary",
+                epochs=3,
+                learning_rate=0.05,
+                seed=7,
+                max_train_candidates=1,
+            )
+
+            metric_lines = (out_dir / "metrics.jsonl").read_text(
+                encoding="utf-8"
+            ).splitlines()
+            model = json.loads((out_dir / "model.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(summary["epochs_completed"], 3)
+        self.assertEqual(summary["original_train_candidate_count"], 2)
+        self.assertEqual(summary["train_candidate_count"], 1)
+        self.assertEqual(len(metric_lines), 3)
+        self.assertEqual(model["model_type"], "linear_boundary_classifier")
+        self.assertIn("topic_shift", model["weights"])
+
+    def test_write_training_summary_logs_dataset_and_epochs_to_wandb(self) -> None:
+        fake = _FakeWandb()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            dataset_dir = root / "dataset"
+            out_dir = root / "train"
+            _write_example(
+                dataset_dir / "sparse_multi_boundary" / "train.jsonl",
+                "S1 topic_shift",
+                "sparse_multi_boundary",
+            )
+
+            summary = write_training_summary(
+                dataset_dir=dataset_dir,
+                out_dir=out_dir,
+                wandb_mode="offline",
+                wandb_project="sermon-test",
+                run_name="wandb-run",
+                epochs=2,
+                wandb_backend=fake,
+            )
+
+        logged_steps = [step for _, step in fake.run.logged]
+        self.assertEqual(fake.init_kwargs["project"], "sermon-test")
+        self.assertEqual(fake.init_kwargs["mode"], "offline")
+        self.assertIn(0, logged_steps)
+        self.assertIn(1, logged_steps)
+        self.assertIn(2, logged_steps)
+        self.assertTrue(fake.run.finished)
+        self.assertTrue(summary["wandb"]["enabled"])
 
 
 if __name__ == "__main__":

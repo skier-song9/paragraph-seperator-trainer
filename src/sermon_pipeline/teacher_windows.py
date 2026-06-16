@@ -214,6 +214,9 @@ def build_teacher_windows(
                 if is_target and source_position + 1 < visible_end:
                     target_local_sids.append(local_sid)
 
+            if not target_local_sids:
+                continue
+
             first_record = document_records[0]
             custom_id = (
                 f"teacher:{document_id}:w{window_index:04d}:"

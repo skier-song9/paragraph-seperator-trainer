@@ -7,6 +7,9 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
+demo = [
+  "gradio>=6.0.0",
+]
 hwp = [
   "libhwp==0.2.0",
 ]
@@ -22,6 +25,7 @@ sermon-teacher-batch-ingest = "sermon_pipeline.teacher_ingest:main"
 sermon-silver-annotations-build = "sermon_pipeline.silver_annotations:main"
 sermon-sft-build = "sermon_pipeline.student_sft:main"
 sermon-sft-train-smoke = "sermon_pipeline.train_sft:main"
+sermon-gradio-demo = "sermon_pipeline.gradio_demo:main"
 
 [build-system]
 requires = ["hatchling"]

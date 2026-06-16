@@ -80,6 +80,16 @@ class TeacherWindowTests(unittest.TestCase):
         self.assertEqual(windows[1].target_local_sids, ("S2", "S3"))
         self.assertEqual(windows[1].sentences[1].source_sentence_id, "doc-a.s0003")
 
+    def test_build_teacher_windows_skips_windows_without_split_candidates(self) -> None:
+        records = [_row("doc-a", 0, "외로운 마지막 문장.")]
+
+        windows = build_teacher_windows(
+            load_sentence_records_from_rows(records),
+            target_size=1,
+        )
+
+        self.assertEqual(windows, [])
+
     def test_window_mapping_excludes_student_input_metadata(self) -> None:
         records = [_row("doc-a", index, f"{index}번 문장.") for index in range(4)]
         window = build_teacher_windows(load_sentence_records_from_rows(records), target_size=4)[
